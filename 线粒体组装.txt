@@ -1,0 +1,10 @@
+ls *| sed 's///g' >species.list
+for species in $(cat species.list);
+	do
+		/home/lx_sky6/software/miniconda3/bin/get_organelle_from_reads.py -1 $species_1.fastq.gz -2 $species_2.fastq.gz -F animal_mt -o $species_mt_out -R 10 -t 20 -k 21,45,65,85,105
+	done
+	
+for species in $(cat species.list);
+	do
+		/home/lx_sky6/yt/soft/mitoz-3.4/mitoz all --outprefix $species --thread_number 20 --clade XX --genetic_code X --fq1 /path/$species.fastq_1.gz --fq2 /path/$species_2.fastq.gz --fastq_read_length 150 --data_size_for_mt_assembly 0.5 --assembler megahit --kmers_megahit 39 59 79 99 119 141 --memory 50 --requiring_taxa 门、纲、科、属
+	done
