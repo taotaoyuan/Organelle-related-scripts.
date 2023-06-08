@@ -1,0 +1,130 @@
+
+-------------------------------------------------------1.一般流程-----------------------------------------------
+
+######提取二代数据
+cd /home/lx_sky6/yt/0106_lanhuamito/0131-gsat
+##比对
+bowtie2-build ref_genome.fa ref_genome.fa
+bowtie2 -p 30 --local -x ref_genome.fa -1 ../WGS/Cassytha_filiformis_BDSW210000018-1A_1.clean.fq.gz -2 ../WGS/Cassytha_filiformis_BDSW210000018-1A_2.clean.fq.gz -S HnymMito.sam
+##排序
+/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools view -bS HnymMito.sam > Hnym.bam
+
+/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools view -bF 4 Hnym.bam > Hnym_filter.bam ##因此，假设我们需要取比对上的reads，可以使用-F 4
+(##提取未比对上的reads:samtools view -@ 8 -bh -f 4 test.bam -o test.unmapped.bam)
+
+bamToFastq -i Hnym_filter.bam -fq mapped.bam.R1.fastq -fq2 mapped.bam.R2.fastq
+
+
+
+######提取三代数据
+export PATH=/home/lx_sky6/yt/soft/miniconda3/bin/:$PATH
+cd /home/lx_sky6/yt/0106_lanhuamito/0131-gsat
+
+export PATH=/home/lx_sky6/yt/soft/miniconda3/bin/:$PATH
+
+cd /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/BMK220921-BB398-02P0001/cell/mito/canu/Pacbio
+minimap2 -ax map-pb ../hits.fa /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/BMK220921-BB398-02P0001/cell/BMK220921-BB398-02P0001.ccs.fastq.gz > YC-ccs.sam
+
+
+/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools view -bS YC-ccs.sam > YC-ccs.bam
+
+/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools view -bF 4 YC-ccs.bam > YC-ccs_filter.bam
+
+bamToFastq -i YC-ccs_filter.bam -fq YC-ccs_filter.fq
+
+seqtk seq -A YC-ccs_filter.fq >YC-ccs_filter.fa
+
+seqkit rmdup -n --ignore-case YC-ccs_filter.fa >YC-ccs_filter2.fa
+
+seqkit seq -m 100 --remove-gaps YC-ccs_filter2.fa >YC-ccs_filter22.fa
+
+/home/lx_sky6/software/canu-2.1.1/build/bin/canu -assemble -p assemble -d assemble-0206 genomesize=5m -pacbio-hifi ./YC-ccs_filter22.fa
+
+
+###筛选contigs
+cd ~/yt/20230106_baimaike/0105_YC_hifi/BMK220921-BB398-02P0001/cell/mito/canu/Pacbio/assemble-0206
+makeblastdb -in assemble.contigs.fasta -dbtype nucl -out assemble.contigs.fasta
+blastn -query Hernandia_nymphaeifolia.fasta -db assemble.contigs.fasta -evalue 1e-5 -outfmt 6 -out blastn.out
+
+cat blastn.out |cut -d '	' -f2|sort|uniq >id
+for i in $(cat id); do grep $i blastn.out |wc -l >>number; done
+paste id  number >hits.summary (选取比对上高的几个contig去geseq注释，加入选取的id存到list文件中)
+seqkit grep -f list assemble.contigs.fasta >>potentail.fa
+
+
+
+-----------------------------------------------------2.特殊情况---------------------------------------------接1.一般流程-------------------------
+
+—————————————————————————此处有三种情况
+######其一：一条环状contig注释完好，即为mito环，后续用二代校准
+
+######其二：多条非环contigs，注释为潜在的contigs，首位相连，截取相连位置左右1000kb左右长度，使用二代数据mapping，查看bam文件，此处是否有reads比对上，若reads在此处均匀覆盖，则为环状，若此处无均匀覆盖reads，表明此处缺碱基，不能直接成环。
+
+export PATH=/home/lx_sky6/yt/soft/miniconda3/bin/:$PATH
+cd /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/BMK220921-BB398-02P0001/cell/mito/canu/tmp
+
+bowtie2 -p 60 --no-unal --local -x tig004_extraction.fa -1 /home/lx_sky6/yt/20230106_baimaike/0201_YC_survey/01.cleandata/Rhodiola_juparensis_clean_R1.fq.gz -2 /home/lx_sky6/yt/20230106_baimaike/0201_YC_survey/01.cleandata/Rhodiola_juparensis_clean_R2.fq.gz |/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools sort  -m 10G -@ 8 >tig004-no-unal.bam
+
+#####其三：针对其二情况，以其二确定的潜在contig建库，用三代数据mapping，选用mapping上的reads进行再次的canu组装，取组装结果再次进行以上三步。最终确定结果。
+
+##1.提取reads运行canu组装,
+export PATH=/home/lx_sky6/yt/soft/miniconda3/bin/:$PATH
+
+cd /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/BMK220921-BB398-02P0001/cell/mito/canu/Pacbio
+minimap2 -ax map-pb ../hits.fa /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/BMK220921-BB398-02P0001/cell/BMK220921-BB398-02P0001.ccs.fastq.gz > YC-ccs.sam
+
+
+/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools view -bS YC-ccs.sam > YC-ccs.bam
+
+/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools view -bF 4 YC-ccs.bam > YC-ccs_filter.bam
+
+bamToFastq -i YC-ccs_filter.bam -fq YC-ccs_filter.fq
+
+seqtk seq -A YC-ccs_filter.fq >YC-ccs_filter.fa
+
+seqkit rmdup -n --ignore-case YC-ccs_filter.fa >YC-ccs_filter2.fa
+
+seqkit seq -m 100 --remove-gaps YC-ccs_filter2.fa >YC-ccs_filter22.fa
+
+/home/lx_sky6/software/canu-2.1.1/build/bin/canu -assemble -p assemble -d assemble-0206 genomesize=5m -pacbio-hifi ./YC-ccs_filter22.fa
+
+
+##2.再次挑选潜在的contigs用geseq注释
+cd assemble-0206
+makeblastdb -in assemble.contigs.fasta -dbtype nucl -out assemble.contigs.fasta
+blastn -query Hernandia_nymphaeifolia.fasta -db lanhuamito.contigs.fasta -evalue 1e-5 -outfmt 6 -out blastn.out
+
+cat blastn.out |cut -d '	' -f2|sort|uniq >id
+for i in $(cat id); do grep $i blastn.out |wc -l >>number; done
+paste id  number >hits.summary (选取比对上高的几个contig去geseq注释，加入选取的id存到list文件中)
+seqkit grep -f list assemble.contigs.fasta >>potentail.fa
+
+##3.检查手动连接成环位置的reads覆盖情况
+bowtie2-build  tig0000043_extraction.fasta tig0000043_extraction.fasta
+bowtie2 -p 64 --no-unal --local -x tig0000043_extraction.fasta  -1 /home/lx_sky6/yt/20230106_baimaike/0201_YC_survey/01.cleandata/Rhodiola_juparensis_clean_R1.fq.gz -2 /home/lx_sky6/yt/20230106_baimaike/0201_YC_survey/01.cleandata/Rhodiola_juparensis_clean_R2.fq.gz |/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools sort  -m 20G -@ 10 >tig0000043-no-unal.bam
+
+
+###最后倒出到gepard软件中查看自身比对点图，若存在重叠片段，需要做自身blast比对去除。
+————————————————————————————————————记得检查其他潜在contigs直接是否存在重复，若无，则都是mito，若有，则最长存在重复的为mito
+在此，我们确定了圆丛红景天的mito序列为tig00000434这条contig。叶绿体为tig00000440这条contig.
+
+
+-----------------------------------------------------------------------3.二代校准----------------------------------------------------------------------------------------------
+
+export PATH=/home/lx_sky6/yt/soft/miniconda3/envs/py2/bin:$PATH
+cd /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/BMK220921-BB398-02P0001/cell/mito/2-polish
+
+##bwa index mito.fasta
+bwa mem -t 64 mito.fa Rhodiola_juparensis_clean_R1.fq.gz Rhodiola_juparensis_clean_R2.fq.gz |/home/lx_sky6/software/miniconda3/envs/yt/bin/samtools sort -m 16G -@ 16 >aligned.bam
+
+samtools index aligned.bam
+
+pilon  --genome mito.fa --frags aligned.bam --fix all --output polished
+
+————————————————————————————
+
+
+
+
+
+
