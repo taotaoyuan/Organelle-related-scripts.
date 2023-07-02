@@ -1,0 +1,224 @@
+##79个genes
+cd ~/yt/20230106_baimaike/0105_YC_hifi/chro_assemble_script/0-all/CDS
+ls *.fas |sed 's/.fas//g' >list
+for id in $(cat list);do linsi --thread 20 1-57id-raw/$id.fas > 2-mafft/$id.mafft.fas;done
+for id in $(cat list);do trimal -in 2-mafft/$id.mafft.fas -out 3-trim/$id.trim.fas -automated1;done
+perl /home/lx_sky6/software/FASconCAT-G/FASconCAT-G_v1.05.1.pl -s -l
+iqtree -s FcC_supermatrix.fas -p FcC_supermatrix_partition.txt -m MFP --mset LG --msub nuclear --rclusterf 10 -B 1000 --alrt 1000 -T AUTO
+
+
+for id in $(cat list); do seqkit grep -f equal_mito.id 3-trim/$id.trim.fas >$id.trim.fas;done
+
+##保存在/home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/chro_assemble_script/1-equal_mito_species/0-raw
+ls *.fas|sed 's/.fas//g' >list
+for id in $(cat list); do grep '>' 0-raw/$id.fas |wc -l >>number;done
+paste list number >summary ##挑选基因齐全的物种
+cat summary |grep '       7'|awk '{print $1}' >filter.list
+for id in $(cat filter.list); do cp 0-raw/$id.fas 1-for_next_analysis/;done ##挑选出来用于下游分析
+
+
+
+
+##线粒体类似
+for i in $(cat list);do seqkit grep -f id $i.fa >$i.fas;done ##由于我换了外群
+rm *.fa
+##修改id对应
+>Hylotelephium_er=NC_072126
+>Rcre=NC_05088
+>Rjup=Rhodiola_coccine
+>Rsac=NC_052735
+>Rtan=OL742462
+>Rwal=OL742458
+>Splu=MN185459
+----------
+for id in $(cat list);do sed -i 's/Hylotelephium_er/NC_072126/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rcre/NC_05088/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rjup/Rhodiola_coccine/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rsac/NC_052735/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rtan/OL742462/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rwal/OL742458/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Splu/MN185459/g' $id.fas;done
+
+线粒体氨基酸同样处理
+cp ../CDS/list .
+for i in $(cat list);do seqkit grep -f id $i.fa >$i.fas;done ##由于我换了外群
+rm *.fa
+for id in $(cat list);do sed -i 's/Hylotelephium_er/NC_072126/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rcre/NC_05088/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rjup/Rhodiola_coccine/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rsac/NC_052735/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rtan/OL742462/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Rwal/OL742458/g' $id.fas;done
+for id in $(cat list);do sed -i 's/Splu/MN185459/g' $id.fas;done
+
+
+cd 2-tree
+##利用cds构树
+for id in $(cat list);do linsi --thread 20 0-raw/$id.fas > 1-mafft/$id.mafft.fas;done
+for id in $(cat list);do trimal -in 1-mafft/$id.mafft.fas -out 2-trim/$id.trim.fas -automated1;done
+perl /home/lx_sky6/software/FASconCAT-G/FASconCAT-G_v1.05.1.pl -s -l
+mv FcC_* ../3-ML &&cd 3-ML
+echo 'MN185459' >outgroup.list
+
+cat FcC_supermatrix.fas | seqkit grep -f outgroup.list | seqkit seq -u -w 0 > outgroup.fa
+cat FcC_supermatrix.fas | seqkit grep -v -f outgroup.list | seqkit seq -u -w 0 > ingroup.fa
+iqtree -s FcC_supermatrix.fas -p FcC_supermatrix_partition.txt -m MFP --mset GTR --rclusterf 10 -B 3000 -T 30
+
+##串联叶绿体线粒体建树
+cd /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/mito13-chro79
+mkdir 1-mito_13 2-chro_79
+##吧数据拷贝过来（由于存在id的不对应）
+@@@@@
+MN185459	MN185459
+NC_050881	NC_05088 ####这里线粒体
+NC_052735	NC_052735
+NC_072126	NC_072126
+OL742458	OL742458
+OL742462	OL742462
+Rhodiola_coccine	Rhodiola_coccine
+@@@@@
+cd 1-mito_13/
+ls *.fas|sed 's/.fas//g' >list
+for id in $(cat list);do sed 's/NC_05088/NC_050881/g' $id.fas >$id.rename.fas;done
+mkdir 1-mafft 2-trim
+for id in $(cat list);do linsi --thread 20 $id.rename.fas > 1-mafft/$id.mafft.fas;done
+for id in $(cat list);do trimal -in 1-mafft/$id.mafft.fas -out 2-trim/$id.trim.fas -automated1;done
+cd .. && mkdir 3-mito-chro
+cd 3-mito-chro
+cp ../1-mito_13/*.rename.fas .
+cp ../1-mito_13/2-trim/*.fas .
+perl /home/lx_sky6/software/FASconCAT-G/FASconCAT-G_v1.05.1.pl -s -l
+cd .. 
+mkdir 4-ML && cd 4-ML
+cp ../3-mito-chro/FcC_* .
+nohup iqtree -s FcC_supermatrix.fas -p FcC_supermatrix_partition.txt -m MFP --mset GTR --rclusterf 10 -B 3000 -T 30 &
+
+##明天跑BI
+
+
+
+
+
+cd 4-kaks
+cp ../3-CDS-AA/AA/* AA/
+cp ../3-CDS-AA/CDS/*.fas CDS/
+
+###((OL742458,(NC_05088,((OL742462,Rhodiola_coccine),NC_052735)))$1,(MN185459,NC_072126));
+export PATH=/home/lx_sky6/software/miniconda3/bin/:$PATH
+
+pamlpip=/home/lx_sky6/czyf/rnaseq_fmj/software/paml_2.3.pl
+cds=/home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/mito_assemble_script/0314_comparate-mito/4-kaks/CDS
+tree=/home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/mito_assemble_script/0314_comparate-mito/4-kaks/input.tree #这里的树文件最好使用无根树
+
+perl $pamlpip -i=$cds -t=$tree -m=ModelAbranchSite -m=NullModelAbranchSite
+python /home/lx_sky6/yt/script/positive_select/branch_site_steve1.py ./run_paml ./prank ##统计正选择位点,手动删除异常值
+
+
+
+##叶绿体正选择
+cd /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/chro_assemble_script/2-positive_select
+cp ../../mito_assemble_script/0314_comparate-mito/4-kaks/input.tree .
+perl $pamlpip -i=$cds -t=$tree -m=ModelAbranchSite -m=NullModelAbranchSite
+python /home/lx_sky6/yt/script/positive_select/branch_site_steve1.py ./run_paml ./prank
+
+
+
+
+
+
+
+
+
+
+
+
+##叶绿体分化时间()
+##由于去掉了MN109979和NC_072131种，所以要挑选CDS
+cd /home/lx_sky6/yt/20230106_baimaike/0105_YC_hifi/chro_assemble_script/0-all/CDS/6-mcmc
+
+mkdir 0-raw
+
+Sedum属的分化时间：17.90 - 19.48 MYA
+Batrachium和整个亚科的分化时间：126.0 - 132.4 MYA
+##转phy格式
+for loci in $(cat ../list); do readal -in ../3-trim/$loci.trim.fas -out ./1-phylip/$loci.phy -phylip_paml; done
+cat 1-phylip/*phy > input.phy
+
+
+
+
+
+
+
+##叶绿体CDS绘制GC3S图
+for i in $(cat list); do seqkit grep -f ../id 0-raw/$i.fas >../$i.fas;done
+cat *.fas >Rjup_chro.cds.fa
+##上传到https://galaxy.pasteur.fr/?tool_id=toolshed.pasteur.fr%2Frepos%2Fkhillion%2Fcodonw%2Fcodonw%2F1.4.4&version=1.4.4&__identifer=zwhtdsoycw9网址
+###绘制GC3s图
+ENC<-function(x){
+  return(2 + x + 29/(x^2+(1-x)^2))
+}
+x <- seq(0,1,by=0.005)
+y <- ENC(x)
+df1<-data.frame(A=x,B=y)
+library(ggplot2)
+df <- read_delim("~/yt/20230106_baimaike/0105_YC_hifi/mito_assemble_script/0314_comparate-mito/6-code/txt", 
+                     "\t", escape_double = FALSE, trim_ws = TRUE)
+ggplot(df1,aes(x=A,y=B))+geom_line(size=1)+
+  geom_point(data=df,aes(x=GC3s,y=ENC))+xlim(0,1)+
+  ylim(0,70)+labs(x="GC3s",y="ENC")+theme_bw()
+
+
+ggplot(df1,aes(x=A,y=B))+geom_line(size=1)+
+  geom_point(data=df,aes(x=GC3s,y=ENC,color=gene))+xlim(0,1)+
+  ylim(0,70)+labs(x="GC3s",y="ENC")+theme_classic()+
+  geom_text(data=df,aes(x=GC3s,y=ENC,color=gene,label=gene))
+  theme(legend.position="none")
+
+
+ggplot(df1,aes(x=A,y=B))+geom_line(size=1)+
+  geom_point(data=df,aes(x=GC3s,y=ENC,color=gene))+xlim(0,1)+
+  ylim(0,70)+labs(x="GC3s",y="ENC")+theme_classic()+
+  geom_text_repel(data=df,aes(x=GC3s,y=ENC,color=gene,label=gene))
+  theme(legend.position="none")
+  
+  
+  
+  
+ggplot(df1,aes(x=A,y=B))+geom_line(size=1)+
+  geom_point(data=df,aes(x=GC3s,y=ENC,color=gene))+xlim(0,1)+
+  ylim(0,70)+labs(x="GC3s",y="ENC")+theme_classic()+
+  geom_text_repel(data=df,aes(x=GC3s,y=ENC,color=gene,label=gene),fontface="bold", color="black")
+  theme(legend.position="none")
+
+
+
+
+
+##计算各个基因的kaks值
+集思慧远：http://112.86.217.82:9929/#/tool/alltool/detail/305
+上传线粒体和叶绿体的gb文件（注意一个一个上传）参考都选择的Hylotelephium erythrostictum物种。
+整理成如下格式
+```
+gene	Group	dS
+accD	accD	0.014323
+accD	accD	0.0162609
+accD	accD	0.0133503
+accD	accD	0.0216871
+```
+网址https://www.bic.ac.cn/ImageGP/index.php/Home/Index/Boxplot.html绘制
+
+
+##检测细胞器TEs
+网址：https://www.girinst.org/censor/index.php ##选择Viridippantae数据库
+
+
+利用MannWhitney U计算
+test <- read_delim("~/yt/20230106_baimaike/0105_YC_hifi/mito_assemble_script/0314_comparate-mito/test","\t", escape_double = FALSE, trim_ws = TRUE)
+with(test,wilcox.test(cpds, mtds, alternative = "two.sided", exact = FALSE))
+
+dn.test <- read_delim("~/yt/20230106_baimaike/0105_YC_hifi/mito_assemble_script/0314_comparate-mito/dn.test", 
+                 "\t", escape_double = FALSE, trim_ws = TRUE)
+with(dn.test,wilcox.test(cpdn, mtdn, alternative = "two.sided", exact = FALSE))
+
+
